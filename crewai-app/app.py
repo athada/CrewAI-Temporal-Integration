@@ -8,15 +8,21 @@ from temporalio.worker import Worker
 
 # Import agent config and components from other modules
 from agents import AgentConfig
-from workflows import DetailedThinkingWorkflow
+from workflows import CollaborativeAgentWorkflow
 
 # Import all activities
-from agents import setup_researcher_agent, setup_writer_agent
-from thinking import researcher_detailed_thinking, writer_detailed_thinking, researcher_think, writer_think
-from tasks import researcher_perform_research, writer_create_report
+from agents import (setup_researcher_agent, setup_writer_agent, setup_critic_agent, 
+                   setup_integrator_agent, agent_response_to_feedback, resolve_agent_disagreement)
+from thinking import (researcher_detailed_thinking, writer_detailed_thinking, 
+                     researcher_think, writer_think)
+from tasks import (researcher_perform_research, writer_create_report, 
+                  collaborative_research, collaborative_report_writing)
+from messages import (send_message, ask_question, provide_answer, make_proposal, 
+                     provide_feedback, get_conversation_history, collaborate_on_decision)
 
 # Flag to control whether to use Temporal
 use_temporal = True  # Set to True to use Temporal, False to run directly
+use_collaborative_mode = True  # Set to True to use the collaborative workflow
 
 # Function to run without Temporal - direct execution
 def run_without_temporal():
@@ -61,37 +67,62 @@ async def main_temporal():
     print(f"Connecting to Temporal at {temporal_host}:{temporal_port}")
     client = await TemporalClient.connect(f"{temporal_host}:{temporal_port}")
     
-    task_queue = "detailed-thinking-queue"
-    
     # Define the tasks for our agents
     research_topic = "Integration of Temporal with AI systems"
     report_title = "Benefits of Temporal for AI Workflows"
+    
+    # Use the collaborative workflow
+    task_queue = "collaborative-agent-queue"
     
     print(f"Starting Temporal worker on task queue: {task_queue}")
     async with Worker(
         client=client,
         task_queue=task_queue,
-        workflows=[DetailedThinkingWorkflow],
+        workflows=[CollaborativeAgentWorkflow],
         activities=[
+            # Agent activities
             setup_researcher_agent,
             setup_writer_agent,
+            setup_critic_agent, 
+            setup_integrator_agent,
+            agent_response_to_feedback,
+            resolve_agent_disagreement,
+            
+            # Thinking activities
             researcher_detailed_thinking,
             writer_detailed_thinking,
             researcher_think,
             writer_think,
+            
+            # Task activities
             researcher_perform_research,
             writer_create_report,
+            collaborative_research,
+            collaborative_report_writing,
+            
+            # Communication activities
+            send_message,
+            ask_question,
+            provide_answer,
+            make_proposal,
+            provide_feedback,
+            get_conversation_history,
+            collaborate_on_decision,
         ],
     ):
-        print("Executing workflow with detailed thinking tracking")
+        print("Executing collaborative agent workflow")
         result = await client.execute_workflow(
-            DetailedThinkingWorkflow.run,
+            CollaborativeAgentWorkflow.run,
             args=[research_topic, report_title],
-            id=f"detailed-thinking-workflow-{int(time.time())}",
+            id=f"collaborative-agent-workflow-{int(time.time())}",
             task_queue=task_queue,
         )
         
-        print(f"\nWorkflow result:\n{result}")
+        print(f"\nWorkflow result summary:")
+        print(f"Final report length: {len(result['final_report'])} characters")
+        print(f"Total thinking steps: {result['collaborative_process']['thinking_steps']}")
+        print(f"Team members: {', '.join(result['team'].values())}")
+        
         return result
 
 if __name__ == "__main__":
