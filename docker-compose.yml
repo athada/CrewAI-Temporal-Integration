@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:14-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - temporal-network
+      
+  # Temporal server
+  temporal:
+    image: temporalio/auto-setup:1.20.0
+    container_name: temporal
+    depends_on:
+      - postgres
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgres
+      - LOG_LEVEL=debug
+    ports:
+      - "7233:7233"
+    networks:
+      - temporal-network
+      
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:2.20.0
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+      - TEMPORAL_PERMIT_WRITE_APIS=true
+    ports:
+      - "8080:8080"
+    networks:
+      - temporal-network
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  
+  # CrewAI application
+  crewai:
+    build:
+      context: ./crewai-app
+      dockerfile: Dockerfile
+    container_name: crewai
+    volumes:
+      - ./crewai-app:/app
+    environment:
+      - OLLAMA_API_BASE=http://host.docker.internal:11434
+      - OLLAMA_MODEL=ollama/deepseek-r1
+      - TEMPORAL_HOST=temporal
+      - TEMPORAL_PORT=7233
+    depends_on:
+      - temporal
+      - temporal-ui
+    networks:
+      - temporal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  temporal-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local 

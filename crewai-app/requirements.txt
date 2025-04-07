@@ -1,0 +1,14 @@
+# Core dependencies
+crewai
+temporalio
+
+# LLM Integration
+langchain
+langchain-community
+langchain-ollama
+
+# Additional utilities
+pydantic
+
+# Optional but recommended
+python-dotenv
